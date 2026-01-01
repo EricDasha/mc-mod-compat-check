@@ -1,2 +1,2 @@
 # mc-mod-compat-check
-可以用来检测minecraft mod是否支持某个版本
+Can be used to check whether a Minecraft mod supports a specific version.
