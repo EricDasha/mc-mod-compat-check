@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "name": "English (US)"
+  },
+  "app": {
+    "title": "Minecraft Mod Compatibility Checker",
+    "config_title": "Configuration",
+    "dir_label": "Mods Directory:",
+    "browse_btn": "Browse...",
+    "mc_ver_label": "Target MC Version:",
+    "loader_label": "Loader:",
+    "strategies_label": "Strategies:",
+    "online_check": "Online Check (Modrinth/CurseForge)",
+    "local_check": "Local Metadata Check",
+    "relaxed_check": "Relaxed Version Matching",
+    "api_key_label": "CurseForge API Key (Optional):",
+    "test_conn_btn": "Test Connections",
+    "start_btn": "Start Compatibility Check",
+    "language_label": "Language:",
+    "tooltips": {
+      "online_check": "Check using Modrinth and CurseForge APIs.\nNote: API data might be inaccurate or use broad version declarations.",
+      "local_check": "Read metadata directly from Jar files (fabric.mod.json / mods.toml).\nThis provides the most accurate theoretical support declaration.",
+      "relaxed_check": "Allow fuzzy version matching.\nExample: Treat 1.20 as compatible with 1.20.1.\nUseful when APIs only declare the major version."
+    }
+  },
+  "columns": {
+    "status": "Status",
+    "file": "File Name",
+    "mod_name": "Mod Name",
+    "version": "Version",
+    "source": "Source",
+    "reason": "Reason"
+  },
+  "status": {
+    "ready": "Ready",
+    "scanning": "Scanning...",
+    "checking": "Checking mods...",
+    "done": "Done",
+    "testing_conn": "Testing connections..."
+  },
+  "dialog": {
+    "error_title": "Error",
+    "info_title": "Info",
+    "warning_title": "Warning",
+    "invalid_dir": "Invalid directory",
+    "no_jars": "No .jar files found",
+    "no_strategies": "No strategies selected!",
+    "conn_test_title": "Connection Test",
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+  },
+  "check_status": {
+    "ok": "OK",
+    "wrong_mc": "Wrong MC Version",
+    "wrong_loader": "Wrong Loader",
+    "unknown_loader": "Unknown Loader",
+    "not_found": "Not Found",
+    "network_error": "Network Error",
+    "unknown": "Unknown",
+    "skipped": "Skipped",
+    "invalid_json": "Invalid Metadata",
+    "no_mc_dep": "No MC Dependency",
+    "heuristic_failed": "Heuristic Failed"
+  },
+  "support_level": {
+    "confirmed": "Confirmed",
+    "likely": "Likely",
+    "possible": "Possible",
+    "unsupported": "Unsupported",
+    "unknown": "Unknown"
+  },
+  "details": {
+    "title": "Compatibility Details"
+  }
+}

@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "name": "日本語"
+  },
+  "app": {
+    "title": "Minecraft Mod 互換性チェッカー",
+    "config_title": "設定",
+    "dir_label": "Mod ディレクトリ:",
+    "browse_btn": "参照...",
+    "mc_ver_label": "ターゲット MC バージョン:",
+    "loader_label": "ローダー:",
+    "strategies_label": "検証戦略:",
+    "online_check": "オンラインチェック (Modrinth/CurseForge)",
+    "local_check": "ローカルメタデータチェック",
+    "relaxed_check": "バージョンの一致を緩和",
+    "api_key_label": "CurseForge API Key (オプション):",
+    "test_conn_btn": "接続テスト",
+    "start_btn": "互換性チェックを開始"
+  },
+  "columns": {
+    "status": "ステータス",
+    "file": "ファイル名",
+    "mod_name": "Mod 名",
+    "version": "バージョン",
+    "source": "ソース",
+    "reason": "理由"
+  },
+  "status": {
+    "ready": "準備完了",
+    "scanning": "スキャン中...",
+    "checking": "Mod をチェック中...",
+    "done": "完了",
+    "testing_conn": "接続をテスト中..."
+  },
+  "dialog": {
+    "error_title": "エラー",
+    "info_title": "情報",
+    "warning_title": "警告",
+    "invalid_dir": "無効なディレクトリ",
+    "no_jars": ".jar ファイルが見つかりません",
+    "no_strategies": "検証戦略が選択されていません！",
+    "conn_test_title": "接続テスト",
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+  },
+  "check_status": {
+    "ok": "OK",
+    "wrong_mc": "MC バージョン不一致",
+    "wrong_loader": "ローダー不一致",
+    "unknown_loader": "不明なローダー",
+    "not_found": "見つかりません",
+    "network_error": "ネットワークエラー",
+    "unknown": "不明",
+    "skipped": "スキップ",
+    "invalid_json": "無効なメタデータ",
+    "no_mc_dep": "MC 依存関係なし",
+    "heuristic_failed": "ヒューリスティック失敗"
+  },
+  "support_level": {
+    "confirmed": "完全対応",
+    "likely": "高確率で対応",
+    "possible": "理論上対応",
+    "unsupported": "非対応",
+    "unknown": "不明"
+  },
+  "details": {
+    "title": "互換性の詳細"
+  }
+}

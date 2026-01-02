@@ -2,19 +2,20 @@ import os
 import zipfile
 import json
 import re
-from typing import Optional
+from typing import Optional, List, Dict
 from .base import VerificationStrategy
-from ..common import ModCheckResult, CheckStatus, LOADER_COMPAT
+from ..common import ModCheckResult, CheckStatus, LOADER_COMPAT, Evidence, SupportLevel
 from ..core.metadata import (
     read_zip_text, 
     extract_minecraft_version_range_from_toml, 
     heuristic_detect_loader, 
-    heuristic_detect_mc_versions, 
-    eval_simple_constraints
+    heuristic_detect_mc_versions
 )
+from ..core.version_range import VersionRange, McVersion
 
 class LocalVerificationStrategy(VerificationStrategy):
-    def verify(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Optional[ModCheckResult]:
+    def collect_evidence(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> List[Evidence]:
+        evidences = []
         file_name = os.path.basename(file_path)
         
         try:
@@ -22,126 +23,223 @@ class LocalVerificationStrategy(VerificationStrategy):
                 # 1. Fabric
                 fabric_json = read_zip_text(z, "fabric.mod.json")
                 if fabric_json:
-                    return self._check_fabric(fabric_json, file_name, file_path, target_mc, expected_loader, relaxed)
+                    evidences.extend(self._collect_fabric_evidence(fabric_json, file_name, target_mc, expected_loader))
 
                 # 2. Forge (mods.toml)
                 mods_toml = read_zip_text(z, "META-INF/mods.toml")
                 if mods_toml:
-                    return self._check_forge(mods_toml, file_name, file_path, target_mc, expected_loader, relaxed)
+                    evidences.extend(self._collect_forge_evidence(mods_toml, file_name, target_mc, expected_loader))
 
                 # 3. Neoforge
                 neo_toml = read_zip_text(z, "META-INF/neoforge.mods.toml")
                 if neo_toml:
-                    return self._check_neoforge(neo_toml, file_name, file_path, target_mc, expected_loader, relaxed)
+                    evidences.extend(self._collect_neoforge_evidence(neo_toml, file_name, target_mc, expected_loader))
 
                 # 4. Quilt
                 quilt_json = read_zip_text(z, "quilt.mod.json")
                 if quilt_json:
-                    return self._check_quilt(quilt_json, file_name, file_path, target_mc, expected_loader, relaxed)
+                    evidences.extend(self._collect_quilt_evidence(quilt_json, file_name, target_mc, expected_loader))
                     
-                # 5. Heuristic
-                return self._check_heuristic(file_name, file_path, target_mc, expected_loader, relaxed)
-                
         except Exception:
-            return None
-        
-        return None
+            pass
 
-    def _check_fabric(self, json_text: str, file_name: str, file_path: str, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
+        # 5. Heuristic (Always run as fallback or additional info)
+        evidences.extend(self._collect_heuristic_evidence(file_name, target_mc, expected_loader, relaxed))
+        
+        return evidences
+
+    def verify(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Optional[ModCheckResult]:
+        evidences = self.collect_evidence(file_path, target_mc, expected_loader, relaxed)
+        if not evidences:
+            return None
+            
+        # Sort by confidence
+        best = sorted(evidences, key=lambda e: e.confidence, reverse=True)[0]
+        
+        # Map back to ModCheckResult
+        status = CheckStatus.UNKNOWN
+        if best.level == SupportLevel.CONFIRMED: status = CheckStatus.OK
+        elif best.level == SupportLevel.LIKELY: status = CheckStatus.OK
+        elif best.level == SupportLevel.POSSIBLE: status = CheckStatus.OK
+        elif best.level == SupportLevel.UNSUPPORTED:
+            if "loader" in best.reason.lower(): status = CheckStatus.WRONG_LOADER
+            else: status = CheckStatus.WRONG_MC
+            
+        return ModCheckResult(
+            file_name=os.path.basename(file_path),
+            file_path=file_path,
+            status=status,
+            reason=best.reason,
+            source=best.source,
+            level=best.level,
+            evidence=evidences
+        )
+
+    def _collect_fabric_evidence(self, json_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+        evs = []
         try:
             meta = json.loads(json_text)
         except json.JSONDecodeError:
-            return ModCheckResult(file_name, file_path, CheckStatus.UNKNOWN, "invalid_json", "local")
+            return []
 
-        mod_name = meta.get("name") or meta.get("id")
-        mod_version = meta.get("version")
-
+        # Loader check
         if expected_loader and expected_loader.lower() not in ("fabric", "quilt"):
-             return ModCheckResult(file_name, file_path, CheckStatus.WRONG_LOADER, "is_fabric", "local", mod_name, mod_version)
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNSUPPORTED,
+                reason=f"Found Fabric mod, expected {expected_loader}"
+            ))
+            return evs 
 
+        # MC Version check
         depends = meta.get("depends", {})
         mc_dep = depends.get("minecraft") if isinstance(depends, dict) else None
         
         if not mc_dep:
-            # No MC dependency declared? Assume OK or Unknown?
-            # Let's return OK but with note
-            return ModCheckResult(file_name, file_path, CheckStatus.OK, "no_mc_dep", "local", mod_name, mod_version)
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.POSSIBLE,
+                reason="Fabric: No explicit MC dependency"
+            ))
+            return evs
 
         # Normalize mc_dep
         if isinstance(mc_dep, str):
             mc_dep = [mc_dep]
-        elif isinstance(mc_dep, dict): # Detailed dependency object
-             # {"version": ">=1.16"}
-             v = mc_dep.get("version")
-             mc_dep = [v] if v else []
+        elif isinstance(mc_dep, dict):
+            v = mc_dep.get("version")
+            mc_dep = [v] if v else []
         elif isinstance(mc_dep, list):
-             # List of strings or objects
-             new_dep = []
-             for item in mc_dep:
-                 if isinstance(item, str): new_dep.append(item)
-                 elif isinstance(item, dict):
-                     v = item.get("version")
-                     if v: new_dep.append(v)
-             mc_dep = new_dep
+            new_dep = []
+            for item in mc_dep:
+                if isinstance(item, str): new_dep.append(item)
+                elif isinstance(item, dict):
+                    v = item.get("version")
+                    if v: new_dep.append(v)
+            mc_dep = new_dep
 
         # Check constraints
-        # Logic: If ANY constraint matches (OR logic usually for list, but Fabric is tricky. usually list is AND for ranges?)
-        # Actually Fabric spec: "A dependency object... or an array of dependency objects (which are OR'd)"
-        # But a dependency string can be a version range.
-        
         matched = False
+        constraints = []
         for c in mc_dep:
-             if eval_simple_constraints(target_mc, c):
-                 matched = True
-                 break
+            constraints.append(c)
+            vr = VersionRange(c)
+            if vr.contains(target_mc):
+                matched = True
+                break
         
         if matched:
-            return ModCheckResult(file_name, file_path, CheckStatus.OK, f"fabric: {mc_dep}", "local", mod_name, mod_version)
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.POSSIBLE,
+                reason=f"Fabric metadata matches: {constraints}"
+            ))
         else:
-            return ModCheckResult(file_name, file_path, CheckStatus.WRONG_MC, f"fabric: {mc_dep}", "local", mod_name, mod_version)
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNSUPPORTED,
+                reason=f"Fabric metadata requires: {constraints}"
+            ))
+            
+        return evs
 
-    def _check_forge(self, toml_text: str, file_name: str, file_path: str, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
-        # Extract name/version regex
-        m_name = re.search(r'displayName\s*=\s*"(.*?)"', toml_text)
-        mod_name = m_name.group(1) if m_name else None
+    def _collect_forge_evidence(self, toml_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+        evs = []
         
         if expected_loader and expected_loader.lower() not in ("forge", "neoforge"):
-             return ModCheckResult(file_name, file_path, CheckStatus.WRONG_LOADER, "is_forge", "local", mod_name)
+             evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNSUPPORTED,
+                reason=f"Found Forge mod, expected {expected_loader}"
+            ))
+             return evs
 
-        mc_range = extract_minecraft_version_range_from_toml(toml_text)
-        if mc_range:
-            if eval_simple_constraints(target_mc, mc_range):
-                 return ModCheckResult(file_name, file_path, CheckStatus.OK, f"forge: {mc_range}", "local", mod_name)
+        mc_range_str = extract_minecraft_version_range_from_toml(toml_text)
+        if mc_range_str:
+            vr = VersionRange(mc_range_str)
+            if vr.contains(target_mc):
+                 evs.append(Evidence(
+                    source="local_metadata",
+                    confidence=0.6,
+                    level=SupportLevel.POSSIBLE,
+                    reason=f"Forge metadata matches: {mc_range_str}"
+                ))
             else:
-                 return ModCheckResult(file_name, file_path, CheckStatus.WRONG_MC, f"forge: {mc_range}", "local", mod_name)
+                 evs.append(Evidence(
+                    source="local_metadata",
+                    confidence=0.6,
+                    level=SupportLevel.UNSUPPORTED,
+                    reason=f"Forge metadata requires: {mc_range_str}"
+                ))
+        else:
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNKNOWN,
+                reason="Forge: No MC range found"
+            ))
         
-        return ModCheckResult(file_name, file_path, CheckStatus.UNKNOWN, "no_mc_range", "local", mod_name)
+        return evs
 
-    def _check_neoforge(self, toml_text: str, file_name: str, file_path: str, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
-         if expected_loader and expected_loader.lower() not in ("neoforge", "forge"):
-             return ModCheckResult(file_name, file_path, CheckStatus.WRONG_LOADER, "is_neoforge", "local")
+    def _collect_neoforge_evidence(self, toml_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+        evs = []
+        if expected_loader and expected_loader.lower() not in ("neoforge", "forge"):
+             evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNSUPPORTED,
+                reason=f"Found NeoForge mod, expected {expected_loader}"
+            ))
+             return evs
          
-         mc_range = extract_minecraft_version_range_from_toml(toml_text)
-         if mc_range:
-            if eval_simple_constraints(target_mc, mc_range):
-                 return ModCheckResult(file_name, file_path, CheckStatus.OK, f"neoforge: {mc_range}", "local")
+        mc_range_str = extract_minecraft_version_range_from_toml(toml_text)
+        if mc_range_str:
+            vr = VersionRange(mc_range_str)
+            if vr.contains(target_mc):
+                 evs.append(Evidence(
+                    source="local_metadata",
+                    confidence=0.6,
+                    level=SupportLevel.POSSIBLE,
+                    reason=f"NeoForge metadata matches: {mc_range_str}"
+                ))
             else:
-                 return ModCheckResult(file_name, file_path, CheckStatus.WRONG_MC, f"neoforge: {mc_range}", "local")
-         return ModCheckResult(file_name, file_path, CheckStatus.UNKNOWN, "no_mc_range", "local")
+                 evs.append(Evidence(
+                    source="local_metadata",
+                    confidence=0.6,
+                    level=SupportLevel.UNSUPPORTED,
+                    reason=f"NeoForge metadata requires: {mc_range_str}"
+                ))
+        else:
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNKNOWN,
+                reason="NeoForge: No MC range found"
+            ))
+        return evs
 
-    def _check_quilt(self, json_text: str, file_name: str, file_path: str, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
+    def _collect_quilt_evidence(self, json_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+        evs = []
         try:
             meta = json.loads(json_text)
         except:
-             return ModCheckResult(file_name, file_path, CheckStatus.UNKNOWN, "invalid_json", "local")
+            return []
+             
+        if expected_loader and expected_loader.lower() not in ("quilt", "fabric"):
+             evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.UNSUPPORTED,
+                reason=f"Found Quilt mod, expected {expected_loader}"
+            ))
+             return evs
              
         ql = meta.get("quilt_loader", {})
-        mod_name = ql.get("metadata", {}).get("name")
-        mod_version = ql.get("version")
-        
-        if expected_loader and expected_loader.lower() not in ("quilt", "fabric"):
-             return ModCheckResult(file_name, file_path, CheckStatus.WRONG_LOADER, "is_quilt", "local", mod_name, mod_version)
-             
         depends = ql.get("depends", [])
         mc_ver_limit = None
         for dep in depends:
@@ -151,39 +249,72 @@ class LocalVerificationStrategy(VerificationStrategy):
         
         if mc_ver_limit:
              if isinstance(mc_ver_limit, str):
-                 if eval_simple_constraints(target_mc, mc_ver_limit):
-                     return ModCheckResult(file_name, file_path, CheckStatus.OK, f"quilt: {mc_ver_limit}", "local", mod_name, mod_version)
+                 vr = VersionRange(mc_ver_limit)
+                 if vr.contains(target_mc):
+                     evs.append(Evidence(
+                        source="local_metadata",
+                        confidence=0.6,
+                        level=SupportLevel.POSSIBLE,
+                        reason=f"Quilt metadata matches: {mc_ver_limit}"
+                    ))
                  else:
-                     return ModCheckResult(file_name, file_path, CheckStatus.WRONG_MC, f"quilt: {mc_ver_limit}", "local", mod_name, mod_version)
-        
-        return ModCheckResult(file_name, file_path, CheckStatus.UNKNOWN, "no_mc_dep", "local", mod_name, mod_version)
+                     evs.append(Evidence(
+                        source="local_metadata",
+                        confidence=0.6,
+                        level=SupportLevel.UNSUPPORTED,
+                        reason=f"Quilt metadata requires: {mc_ver_limit}"
+                    ))
+        else:
+            evs.append(Evidence(
+                source="local_metadata",
+                confidence=0.6,
+                level=SupportLevel.POSSIBLE,
+                reason="Quilt: No MC dependency"
+            ))
+        return evs
 
-    def _check_heuristic(self, file_name: str, file_path: str, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
+    def _collect_heuristic_evidence(self, file_name: str, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> List[Evidence]:
+        evs = []
         det_loader = heuristic_detect_loader(file_name)
         det_versions = heuristic_detect_mc_versions(file_name)
         
+        # Loader check
         if expected_loader and det_loader:
              compat_set = LOADER_COMPAT.get(expected_loader.lower(), {expected_loader.lower()})
              if det_loader.lower() not in compat_set:
-                 return ModCheckResult(file_name, file_path, CheckStatus.WRONG_LOADER, f"heuristic_loader: {det_loader}", "local")
+                 evs.append(Evidence(
+                    source="heuristic",
+                    confidence=0.3,
+                    level=SupportLevel.UNSUPPORTED,
+                    reason=f"Filename suggests {det_loader}, expected {expected_loader}"
+                ))
         
+        # Version check
         if det_versions:
-             # Check if target_mc matches any detected version
-             # relaxed check: 1.20 matches 1.20.1?
              matched = False
              for v in det_versions:
+                 # Check if exact match or simple relaxed match
                  if v == target_mc:
                      matched = True
                      break
                  if relaxed:
-                     # 1.20 matches 1.20.x
                      if target_mc.startswith(v) or v.startswith(target_mc):
                          matched = True
                          break
              
              if matched:
-                  return ModCheckResult(file_name, file_path, CheckStatus.OK, f"heuristic: {det_versions}", "local")
+                  evs.append(Evidence(
+                    source="heuristic",
+                    confidence=0.3,
+                    level=SupportLevel.LIKELY, # Filename match is quite likely to be correct intent
+                    reason=f"Filename contains version {det_versions}"
+                ))
              else:
-                  return ModCheckResult(file_name, file_path, CheckStatus.WRONG_MC, f"heuristic: {det_versions}", "local")
-                  
-        return ModCheckResult(file_name, file_path, CheckStatus.UNKNOWN, "heuristic_failed", "local")
+                  evs.append(Evidence(
+                    source="heuristic",
+                    confidence=0.3,
+                    level=SupportLevel.UNSUPPORTED, # Weakly unsupported
+                    reason=f"Filename contains {det_versions}, expected {target_mc}"
+                ))
+        
+        return evs

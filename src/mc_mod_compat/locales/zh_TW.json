@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "name": "繁體中文"
+  },
+  "app": {
+    "title": "Minecraft Mod 相容性檢查工具",
+    "config_title": "設定",
+    "dir_label": "Mod 目錄:",
+    "browse_btn": "瀏覽...",
+    "mc_ver_label": "目標 MC 版本:",
+    "loader_label": "載入器:",
+    "strategies_label": "驗證策略:",
+    "online_check": "連線檢查 (Modrinth/CurseForge)",
+    "local_check": "本地元數據檢查",
+    "relaxed_check": "寬鬆版本匹配",
+    "api_key_label": "CurseForge API Key (可選):",
+    "test_conn_btn": "測試連線",
+    "start_btn": "開始相容性檢查"
+  },
+  "columns": {
+    "status": "狀態",
+    "file": "檔案名稱",
+    "mod_name": "Mod 名稱",
+    "version": "版本",
+    "source": "來源",
+    "reason": "原因"
+  },
+  "status": {
+    "ready": "就緒",
+    "scanning": "掃描中...",
+    "checking": "正在檢查 Mod...",
+    "done": "完成",
+    "testing_conn": "正在測試連線..."
+  },
+  "dialog": {
+    "error_title": "錯誤",
+    "info_title": "提示",
+    "warning_title": "警告",
+    "invalid_dir": "無效的目錄",
+    "no_jars": "未找到 .jar 檔案",
+    "no_strategies": "未選擇任何驗證策略！",
+    "conn_test_title": "連線測試",
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+  },
+  "check_status": {
+    "ok": "正常",
+    "wrong_mc": "MC 版本不符",
+    "wrong_loader": "載入器不符",
+    "unknown_loader": "未知載入器",
+    "not_found": "未找到",
+    "network_error": "網路錯誤",
+    "unknown": "未知",
+    "skipped": "已跳過",
+    "invalid_json": "元數據無效",
+    "no_mc_dep": "無 MC 依賴",
+    "heuristic_failed": "啟發式檢測失敗"
+  },
+  "support_level": {
+    "confirmed": "完全支援",
+    "likely": "極大概率支援",
+    "possible": "理論支援",
+    "unsupported": "不支援",
+    "unknown": "未知"
+  },
+  "details": {
+    "title": "相容性詳情"
+  }
+}

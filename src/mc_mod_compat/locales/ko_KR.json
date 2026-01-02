@@ -1,0 +1,68 @@
+{
+  "_meta": {
+    "name": "한국어"
+  },
+  "app": {
+    "title": "Minecraft 모드 호환성 검사기",
+    "config_title": "설정",
+    "dir_label": "모드 디렉토리:",
+    "browse_btn": "찾아보기...",
+    "mc_ver_label": "대상 MC 버전:",
+    "loader_label": "로더:",
+    "strategies_label": "검증 전략:",
+    "online_check": "온라인 검사 (Modrinth/CurseForge)",
+    "local_check": "로컬 메타데이터 검사",
+    "relaxed_check": "느슨한 버전 일치",
+    "api_key_label": "CurseForge API Key (선택):",
+    "test_conn_btn": "연결 테스트",
+    "start_btn": "호환성 검사 시작"
+  },
+  "columns": {
+    "status": "상태",
+    "file": "파일 이름",
+    "mod_name": "모드 이름",
+    "version": "버전",
+    "source": "출처",
+    "reason": "이유"
+  },
+  "status": {
+    "ready": "준비",
+    "scanning": "스캔 중...",
+    "checking": "모드 검사 중...",
+    "done": "완료",
+    "testing_conn": "연결 테스트 중..."
+  },
+  "dialog": {
+    "error_title": "오류",
+    "info_title": "정보",
+    "warning_title": "경고",
+    "invalid_dir": "잘못된 디렉토리",
+    "no_jars": ".jar 파일을 찾을 수 없습니다",
+    "no_strategies": "검증 전략이 선택되지 않았습니다!",
+    "conn_test_title": "연결 테스트",
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+  },
+  "check_status": {
+    "ok": "정상",
+    "wrong_mc": "MC 버전 불일치",
+    "wrong_loader": "로더 불일치",
+    "unknown_loader": "알 수 없는 로더",
+    "not_found": "찾을 수 없음",
+    "network_error": "네트워크 오류",
+    "unknown": "알 수 없음",
+    "skipped": "건너뜀",
+    "invalid_json": "잘못된 메타데이터",
+    "no_mc_dep": "MC 종속성 없음",
+    "heuristic_failed": "휴리스틱 실패"
+  },
+  "support_level": {
+    "confirmed": "완벽 지원",
+    "likely": "지원 가능성 높음",
+    "possible": "이론상 지원",
+    "unsupported": "미지원",
+    "unknown": "알 수 없음"
+  },
+  "details": {
+    "title": "호환성 상세 정보"
+  }
+}

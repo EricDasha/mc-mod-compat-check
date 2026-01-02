@@ -1,7 +1,7 @@
-from typing import List, Dict, Optional, Any
 import os
+from typing import List, Dict, Optional
 from .base import VerificationStrategy
-from ..common import ModCheckResult, CheckStatus, LOADER_COMPAT
+from ..common import ModCheckResult, CheckStatus, LOADER_COMPAT, Evidence, SupportLevel
 from ..api.modrinth import ModrinthClient
 from ..api.curseforge import CurseForgeClient
 from ..core.hashing import compute_sha1, compute_curseforge_hash
@@ -11,115 +11,151 @@ class OnlineVerificationStrategy(VerificationStrategy):
         self.mr = modrinth_client
         self.cf = curseforge_client
 
-    def verify(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Optional[ModCheckResult]:
-        # Single file verification not efficient for online, but implemented for interface.
-        # It just calls batch with 1 item.
-        res = self.batch_verify([file_path], target_mc, expected_loader, relaxed)
-        return res.get(file_path)
+    def collect_evidence(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> List[Evidence]:
+        res = self.batch_collect_evidence([file_path], target_mc, expected_loader, relaxed)
+        return res.get(file_path, [])
 
-    def batch_verify(self, file_paths: List[str], target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Dict[str, ModCheckResult]:
-        results = {}
+    def batch_collect_evidence(self, file_paths: List[str], target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Dict[str, List[Evidence]]:
+        results = {fp: [] for fp in file_paths}
         
         # 1. Modrinth (SHA1)
-        sha1_map = {} # sha1 -> file_path
+        sha1_map = {}
         for fp in file_paths:
             s = compute_sha1(fp)
             sha1_map[s] = fp
             
         hashes = list(sha1_map.keys())
-        mr_results = self.mr.get_versions_by_hashes(hashes)
+        found_in_mr = set()
         
-        for h, version_data in mr_results.items():
-            fp = sha1_map.get(h)
-            if fp:
-                res = self._process_modrinth(fp, version_data, target_mc, expected_loader, relaxed)
-                results[fp] = res
+        if hashes:
+            try:
+                mr_results = self.mr.get_versions_by_hashes(hashes)
+                for h, version_data in mr_results.items():
+                    fp = sha1_map.get(h)
+                    if fp:
+                        found_in_mr.add(fp)
+                        evs = self._process_modrinth_evidence(version_data, target_mc, expected_loader)
+                        results[fp].extend(evs)
+            except Exception:
+                pass
         
         # 2. CurseForge (Murmur2) - only for those not found in Modrinth
-        remaining_paths = [fp for fp in file_paths if fp not in results]
+        remaining_paths = [fp for fp in file_paths if fp not in found_in_mr]
         
         if self.cf and remaining_paths:
-            fp_map = {} # fingerprint -> file_path
-            for fp in remaining_paths:
-                f = compute_curseforge_hash(fp)
-                if f > 0:
-                    fp_map[f] = fp
-            
-            fingerprints = list(fp_map.keys())
-            cf_results = self.cf.get_fingerprint_matches(fingerprints)
-            
-            for fid, match_data in cf_results.items():
-                fp = fp_map.get(fid)
-                if fp:
-                    res = self._process_curseforge(fp, match_data, target_mc, expected_loader, relaxed)
-                    results[fp] = res
+            try:
+                fp_map = {}
+                for fp in remaining_paths:
+                    f = compute_curseforge_hash(fp)
+                    if f > 0:
+                        fp_map[f] = fp
+                
+                fingerprints = list(fp_map.keys())
+                if fingerprints:
+                    cf_results = self.cf.get_fingerprint_matches(fingerprints)
+                    for fid, match_data in cf_results.items():
+                        fp = fp_map.get(fid)
+                        if fp:
+                            evs = self._process_curseforge_evidence(match_data, target_mc, expected_loader)
+                            results[fp].extend(evs)
+            except Exception:
+                pass
 
         return results
 
-    def _process_modrinth(self, file_path: str, data: dict, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
-        file_name = os.path.basename(file_path)
-        supported_game_versions = data.get("game_versions", [])
-        loaders = data.get("loaders", [])
+    def verify(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Optional[ModCheckResult]:
+        evidences = self.collect_evidence(file_path, target_mc, expected_loader, relaxed)
+        if not evidences:
+            return None
+            
+        # Sort by confidence
+        best = sorted(evidences, key=lambda e: e.confidence, reverse=True)[0]
         
-        # MC Check
-        mc_ok = target_mc in supported_game_versions
-        # Relaxed check could be added here
-        
-        # Loader Check
-        loader_ok = True
-        if expected_loader:
-             compat = LOADER_COMPAT.get(expected_loader.lower(), {expected_loader.lower()})
-             # Modrinth loaders are strings
-             mod_loaders = [l.lower() for l in loaders]
-             if not any(l in compat for l in mod_loaders):
-                 loader_ok = False
-        
-        status = CheckStatus.OK
-        if not mc_ok: status = CheckStatus.WRONG_MC
-        elif not loader_ok: status = CheckStatus.WRONG_LOADER
-        
+        # Map back to ModCheckResult
+        status = CheckStatus.UNKNOWN
+        if best.level == SupportLevel.CONFIRMED: status = CheckStatus.OK
+        elif best.level == SupportLevel.LIKELY: status = CheckStatus.OK
+        elif best.level == SupportLevel.POSSIBLE: status = CheckStatus.OK
+        elif best.level == SupportLevel.UNSUPPORTED:
+            if "loader" in best.reason.lower(): status = CheckStatus.WRONG_LOADER
+            else: status = CheckStatus.WRONG_MC
+            
         return ModCheckResult(
-            file_name=file_name,
+            file_name=os.path.basename(file_path),
             file_path=file_path,
             status=status,
-            reason=f"mr_mc:{supported_game_versions}",
-            source="modrinth",
-            mod_name=data.get("name"),
-            mod_version=data.get("version_number"),
-            url=f"https://modrinth.com/version/{data.get('id')}"
+            reason=best.reason,
+            source=best.source,
+            level=best.level,
+            evidence=evidences
         )
 
-    def _process_curseforge(self, file_path: str, data: dict, target_mc: str, expected_loader: Optional[str], relaxed: bool) -> ModCheckResult:
-        file_name = os.path.basename(file_path)
+    def _process_modrinth_evidence(self, data: dict, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+        evs = []
+        supported_versions = data.get("game_versions", [])
+        loaders = data.get("loaders", [])
+        
+        # Base evidence (Found)
+        evs.append(Evidence(
+            source="modrinth",
+            confidence=0.5, # Low confidence if no specific match
+            level=SupportLevel.UNKNOWN,
+            reason="Found on Modrinth, version/loader mismatch or unlisted"
+        ))
+        
+        # MC Check
+        if target_mc in supported_versions:
+            evs.append(Evidence(
+                source="modrinth",
+                confidence=1.0,
+                level=SupportLevel.CONFIRMED,
+                reason=f"Modrinth lists version {target_mc}"
+            ))
+             
+        # Loader Check
+        if expected_loader:
+             compat = LOADER_COMPAT.get(expected_loader.lower(), {expected_loader.lower()})
+             mod_loaders = [l.lower() for l in loaders]
+             if not any(l in compat for l in mod_loaders):
+                  evs.append(Evidence(
+                    source="modrinth",
+                    confidence=1.0,
+                    level=SupportLevel.UNSUPPORTED,
+                    reason=f"Modrinth lists loaders {loaders}, expected {expected_loader}"
+                ))
+        
+        return evs
+
+    def _process_curseforge_evidence(self, data: dict, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+        evs = []
         game_versions = data.get("gameVersions", [])
+        mc_vers = [v for v in game_versions if v[0].isdigit()]
         
-        # Filter game versions to find MC versions
-        # CF mixes loaders and MC versions in gameVersions list
-        mc_vers = [v for v in game_versions if v[0].isdigit()] # Heuristic: starts with digit
+        evs.append(Evidence(
+            source="curseforge",
+            confidence=0.4,
+            level=SupportLevel.UNKNOWN,
+            reason="Found on CurseForge, version/loader mismatch or unlisted"
+        ))
         
-        mc_ok = target_mc in mc_vers
-        
-        loader_ok = True # CF doesn't always expose loader easily in this endpoint? 
-        # Actually exactMatches usually has gameVersions which includes "Fabric", "Forge".
-        
+        if target_mc in mc_vers:
+            evs.append(Evidence(
+                source="curseforge",
+                confidence=0.8,
+                level=SupportLevel.CONFIRMED, 
+                reason=f"CurseForge lists version {target_mc}"
+            ))
+            
         if expected_loader:
             compat = LOADER_COMPAT.get(expected_loader.lower(), {expected_loader.lower()})
             mod_loaders = [v.lower() for v in game_versions if not v[0].isdigit()]
-            # If no loader info found, maybe assume OK or check if list is empty?
             if mod_loaders:
-                 if not any(l in compat for l in mod_loaders):
-                     loader_ok = False
-
-        status = CheckStatus.OK
-        if not mc_ok: status = CheckStatus.WRONG_MC
-        elif not loader_ok: status = CheckStatus.WRONG_LOADER
+                if not any(l in compat for l in mod_loaders):
+                     evs.append(Evidence(
+                        source="curseforge",
+                        confidence=0.8,
+                        level=SupportLevel.UNSUPPORTED,
+                        reason=f"CurseForge lists loaders {mod_loaders}, expected {expected_loader}"
+                    ))
         
-        return ModCheckResult(
-            file_name=file_name,
-            file_path=file_path,
-            status=status,
-            reason=f"cf_mc:{mc_vers}",
-            source="curseforge",
-            mod_name=data.get("displayName"),
-            mod_version=data.get("fileName")
-        )
+        return evs

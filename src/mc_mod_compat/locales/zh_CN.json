@@ -1,0 +1,74 @@
+{
+  "_meta": {
+    "name": "简体中文"
+  },
+  "app": {
+    "title": "Minecraft Mod 兼容性检查工具",
+    "config_title": "配置",
+    "dir_label": "Mod 目录:",
+    "browse_btn": "浏览...",
+    "mc_ver_label": "目标 MC 版本:",
+    "loader_label": "加载器:",
+    "strategies_label": "验证策略:",
+    "online_check": "联网检查 (Modrinth/CurseForge)",
+    "local_check": "本地元数据检查",
+    "relaxed_check": "宽松版本匹配",
+    "api_key_label": "CurseForge API Key (可选):",
+    "test_conn_btn": "测试连接",
+    "start_btn": "开始兼容性检查",
+    "language_label": "语言:",
+    "tooltips": {
+      "online_check": "使用 Modrinth 和 CurseForge API 进行检查。\n注意：API 数据可能存在滞后或不准确（如“宽泛声明”问题）。",
+      "local_check": "直接读取 Jar 包内的 metadata 文件（fabric.mod.json / mods.toml）。\n这是最准确的理论支持声明。",
+      "relaxed_check": "允许版本号的模糊匹配。\n例如：认为 1.20 兼容 1.20.1。\n适用于 API 仅声明了主版本号的情况。"
+    }
+  },
+  "columns": {
+    "status": "状态",
+    "file": "文件名",
+    "mod_name": "Mod 名称",
+    "version": "版本",
+    "source": "来源",
+    "reason": "原因"
+  },
+  "status": {
+    "ready": "就绪",
+    "scanning": "扫描中...",
+    "checking": "正在检查 Mod...",
+    "done": "完成",
+    "testing_conn": "正在测试连接..."
+  },
+  "dialog": {
+    "error_title": "错误",
+    "info_title": "提示",
+    "warning_title": "警告",
+    "invalid_dir": "无效的目录",
+    "no_jars": "未找到 .jar 文件",
+    "no_strategies": "未选择任何验证策略！",
+    "conn_test_title": "连接测试",
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+  },
+  "check_status": {
+    "ok": "正常",
+    "wrong_mc": "MC 版本不符",
+    "wrong_loader": "加载器不符",
+    "unknown_loader": "未知加载器",
+    "not_found": "未找到",
+    "network_error": "网络错误",
+    "unknown": "未知",
+    "skipped": "已跳过",
+    "invalid_json": "元数据无效",
+    "no_mc_dep": "无 MC 依赖",
+    "heuristic_failed": "启发式检测失败"
+  },
+  "support_level": {
+    "confirmed": "完全支持",
+    "likely": "极大概率支持",
+    "possible": "理论支持",
+    "unsupported": "不支持",
+    "unknown": "未知"
+  },
+  "details": {
+    "title": "兼容性详情"
+  }
+}
