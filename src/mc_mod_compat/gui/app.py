@@ -140,7 +140,7 @@ class ModCompatApp(tk.Tk):
         status_frame = ttk.Frame(self, relief=tk.SUNKEN, padding=2)
         status_frame.pack(side=tk.BOTTOM, fill=tk.X)
         ttk.Label(status_frame, textvariable=self.status_var).pack(side=tk.LEFT)
-        ttk.ProgressBar(status_frame, variable=self.progress_var, maximum=100).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=10)
+        ttk.Progressbar(status_frame, variable=self.progress_var, maximum=100).pack(side=tk.RIGHT, fill=tk.X, expand=True, padx=10)
 
     def browse_dir(self):
         d = filedialog.askdirectory()
