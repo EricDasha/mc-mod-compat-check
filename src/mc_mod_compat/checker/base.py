@@ -7,7 +7,6 @@ class VerificationStrategy(ABC):
     def verify(self, file_path: str, target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Optional[ModCheckResult]:
         pass
 
-    @abstractmethod
     def batch_verify(self, file_paths: List[str], target_mc: str, expected_loader: Optional[str] = None, relaxed: bool = False) -> Dict[str, ModCheckResult]:
         """
         Default implementation just calls verify in a loop.
