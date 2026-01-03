@@ -75,7 +75,7 @@ class LocalVerificationStrategy(VerificationStrategy):
             evidence=evidences
         )
 
-    def _collect_fabric_evidence(self, json_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+    def _collect_fabric_evidence(self, json_text: str, file_name: str, target_mc: str, expected_loader: Optional[str], relaxed: bool = False) -> List[Evidence]:
         evs = []
         try:
             meta = json.loads(json_text)
@@ -126,7 +126,7 @@ class LocalVerificationStrategy(VerificationStrategy):
         for c in mc_dep:
             constraints.append(c)
             vr = VersionRange(c)
-            if vr.contains(target_mc):
+            if vr.contains(target_mc, relaxed=relaxed):
                 matched = True
                 break
         
@@ -147,7 +147,7 @@ class LocalVerificationStrategy(VerificationStrategy):
             
         return evs
 
-    def _collect_forge_evidence(self, toml_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+    def _collect_forge_evidence(self, toml_text: str, file_name: str, target_mc: str, expected_loader: Optional[str], relaxed: bool = False) -> List[Evidence]:
         evs = []
         
         if expected_loader and expected_loader.lower() not in ("forge", "neoforge"):
@@ -162,7 +162,7 @@ class LocalVerificationStrategy(VerificationStrategy):
         mc_range_str = extract_minecraft_version_range_from_toml(toml_text)
         if mc_range_str:
             vr = VersionRange(mc_range_str)
-            if vr.contains(target_mc):
+            if vr.contains(target_mc, relaxed=relaxed):
                  evs.append(Evidence(
                     source="local_metadata",
                     confidence=0.6,
@@ -186,7 +186,7 @@ class LocalVerificationStrategy(VerificationStrategy):
         
         return evs
 
-    def _collect_neoforge_evidence(self, toml_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+    def _collect_neoforge_evidence(self, toml_text: str, file_name: str, target_mc: str, expected_loader: Optional[str], relaxed: bool = False) -> List[Evidence]:
         evs = []
         if expected_loader and expected_loader.lower() not in ("neoforge", "forge"):
              evs.append(Evidence(
@@ -200,7 +200,7 @@ class LocalVerificationStrategy(VerificationStrategy):
         mc_range_str = extract_minecraft_version_range_from_toml(toml_text)
         if mc_range_str:
             vr = VersionRange(mc_range_str)
-            if vr.contains(target_mc):
+            if vr.contains(target_mc, relaxed=relaxed):
                  evs.append(Evidence(
                     source="local_metadata",
                     confidence=0.6,
@@ -223,7 +223,7 @@ class LocalVerificationStrategy(VerificationStrategy):
             ))
         return evs
 
-    def _collect_quilt_evidence(self, json_text: str, file_name: str, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+    def _collect_quilt_evidence(self, json_text: str, file_name: str, target_mc: str, expected_loader: Optional[str], relaxed: bool = False) -> List[Evidence]:
         evs = []
         try:
             meta = json.loads(json_text)
@@ -250,7 +250,7 @@ class LocalVerificationStrategy(VerificationStrategy):
         if mc_ver_limit:
              if isinstance(mc_ver_limit, str):
                  vr = VersionRange(mc_ver_limit)
-                 if vr.contains(target_mc):
+                 if vr.contains(target_mc, relaxed=relaxed):
                      evs.append(Evidence(
                         source="local_metadata",
                         confidence=0.6,

@@ -149,25 +149,39 @@ class VersionRange:
         self.min_inclusive = True
         self.max_inclusive = True
 
-    def contains(self, version: Union[str, McVersion]) -> bool:
+    def contains(self, version: Union[str, McVersion], relaxed: bool = False) -> bool:
         if isinstance(version, str):
             v = McVersion(version)
         else:
             v = version
             
+        # Standard check
+        in_range = True
         if self.min_ver:
             if self.min_inclusive:
-                if v < self.min_ver: return False
+                if v < self.min_ver: in_range = False
             else:
-                if v <= self.min_ver: return False
+                if v <= self.min_ver: in_range = False
                 
-        if self.max_ver:
+        if in_range and self.max_ver:
             if self.max_inclusive:
-                if v > self.max_ver: return False
+                if v > self.max_ver: in_range = False
             else:
-                if v >= self.max_ver: return False
+                if v >= self.max_ver: in_range = False
                 
-        return True
+        if in_range:
+            return True
+            
+        # Relaxed logic
+        if relaxed:
+            # If exact match failed, try ignoring patch version
+            # Only applies if this range effectively represents a single version
+            if self.min_ver and self.max_ver and self.min_ver == self.max_ver:
+                # Check major/minor match
+                if v.major == self.min_ver.major and v.minor == self.min_ver.minor:
+                    return True
+                    
+        return False
 
 def parse_version_range(range_str: str) -> VersionRange:
     return VersionRange(range_str)

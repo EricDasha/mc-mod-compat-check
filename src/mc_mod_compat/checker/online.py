@@ -6,6 +6,8 @@ from ..api.modrinth import ModrinthClient
 from ..api.curseforge import CurseForgeClient
 from ..core.hashing import compute_sha1, compute_curseforge_hash
 
+from ..core.version_range import VersionRange, McVersion
+
 class OnlineVerificationStrategy(VerificationStrategy):
     def __init__(self, modrinth_client: ModrinthClient, curseforge_client: Optional[CurseForgeClient]):
         self.mr = modrinth_client
@@ -34,7 +36,7 @@ class OnlineVerificationStrategy(VerificationStrategy):
                     fp = sha1_map.get(h)
                     if fp:
                         found_in_mr.add(fp)
-                        evs = self._process_modrinth_evidence(version_data, target_mc, expected_loader)
+                        evs = self._process_modrinth_evidence(version_data, target_mc, expected_loader, relaxed)
                         results[fp].extend(evs)
             except Exception:
                 pass
@@ -56,7 +58,7 @@ class OnlineVerificationStrategy(VerificationStrategy):
                     for fid, match_data in cf_results.items():
                         fp = fp_map.get(fid)
                         if fp:
-                            evs = self._process_curseforge_evidence(match_data, target_mc, expected_loader)
+                            evs = self._process_curseforge_evidence(match_data, target_mc, expected_loader, relaxed)
                             results[fp].extend(evs)
             except Exception:
                 pass
@@ -90,7 +92,7 @@ class OnlineVerificationStrategy(VerificationStrategy):
             evidence=evidences
         )
 
-    def _process_modrinth_evidence(self, data: dict, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+    def _process_modrinth_evidence(self, data: dict, target_mc: str, expected_loader: Optional[str], relaxed: bool = False) -> List[Evidence]:
         evs = []
         supported_versions = data.get("game_versions", [])
         loaders = data.get("loaders", [])
@@ -104,12 +106,31 @@ class OnlineVerificationStrategy(VerificationStrategy):
         ))
         
         # MC Check
+        matched = False
+        exact = False
+        
         if target_mc in supported_versions:
+            matched = True
+            exact = True
+        elif relaxed:
+            # Check for relaxed match
+            t = McVersion(target_mc)
+            for sv in supported_versions:
+                 if not sv or not sv[0].isdigit(): continue
+                 try:
+                     v = McVersion(sv)
+                     if v.major == t.major and v.minor == t.minor:
+                         matched = True
+                         break
+                 except:
+                     continue
+
+        if matched:
             evs.append(Evidence(
                 source="modrinth",
-                confidence=1.0,
-                level=SupportLevel.CONFIRMED,
-                reason=f"Modrinth lists version {target_mc}"
+                confidence=1.0 if exact else 0.9,
+                level=SupportLevel.CONFIRMED if exact else SupportLevel.LIKELY,
+                reason=f"Modrinth lists version {target_mc}" if exact else "Modrinth lists compatible version (relaxed match)"
             ))
              
         # Loader Check
@@ -126,10 +147,10 @@ class OnlineVerificationStrategy(VerificationStrategy):
         
         return evs
 
-    def _process_curseforge_evidence(self, data: dict, target_mc: str, expected_loader: Optional[str]) -> List[Evidence]:
+    def _process_curseforge_evidence(self, data: dict, target_mc: str, expected_loader: Optional[str], relaxed: bool = False) -> List[Evidence]:
         evs = []
         game_versions = data.get("gameVersions", [])
-        mc_vers = [v for v in game_versions if v[0].isdigit()]
+        mc_vers = [v for v in game_versions if v and v[0].isdigit()]
         
         evs.append(Evidence(
             source="curseforge",
@@ -138,17 +159,34 @@ class OnlineVerificationStrategy(VerificationStrategy):
             reason="Found on CurseForge, version/loader mismatch or unlisted"
         ))
         
+        matched = False
+        exact = False
+        
         if target_mc in mc_vers:
+            matched = True
+            exact = True
+        elif relaxed:
+            t = McVersion(target_mc)
+            for sv in mc_vers:
+                 try:
+                     v = McVersion(sv)
+                     if v.major == t.major and v.minor == t.minor:
+                         matched = True
+                         break
+                 except:
+                     continue
+        
+        if matched:
             evs.append(Evidence(
                 source="curseforge",
-                confidence=0.8,
-                level=SupportLevel.CONFIRMED, 
-                reason=f"CurseForge lists version {target_mc}"
+                confidence=0.8 if exact else 0.7,
+                level=SupportLevel.CONFIRMED if exact else SupportLevel.LIKELY, 
+                reason=f"CurseForge lists version {target_mc}" if exact else "CurseForge lists compatible version (relaxed match)"
             ))
             
         if expected_loader:
             compat = LOADER_COMPAT.get(expected_loader.lower(), {expected_loader.lower()})
-            mod_loaders = [v.lower() for v in game_versions if not v[0].isdigit()]
+            mod_loaders = [v.lower() for v in game_versions if v and not v[0].isdigit()]
             if mod_loaders:
                 if not any(l in compat for l in mod_loaders):
                      evs.append(Evidence(

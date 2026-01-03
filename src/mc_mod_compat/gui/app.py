@@ -76,6 +76,7 @@ class ModCompatApp(tk.Tk):
         self.chk_relaxed.config(text=self.i18n.t("app.relaxed_check"))
         self.lbl_api_key.config(text=self.i18n.t("app.api_key_label"))
         self.btn_test_conn.config(text=self.i18n.t("app.test_conn_btn"))
+        self.btn_save.config(text=self.i18n.t("app.save_btn", default="Save Settings"))
         self.lbl_lang.config(text=self.i18n.t("app.language_label", default="Language:"))
         
         # Action Button

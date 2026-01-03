@@ -46,7 +46,8 @@
     "no_jars": "No .jar files found",
     "no_strategies": "No strategies selected!",
     "conn_test_title": "Connection Test",
-    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}",
+    "config_saved": "Configuration saved successfully."
   },
   "check_status": {
     "ok": "OK",

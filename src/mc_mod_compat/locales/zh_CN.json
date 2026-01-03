@@ -15,6 +15,7 @@
     "relaxed_check": "宽松版本匹配",
     "api_key_label": "CurseForge API Key (可选):",
     "test_conn_btn": "测试连接",
+    "save_btn": "保存设置",
     "start_btn": "开始兼容性检查",
     "language_label": "语言:",
     "tooltips": {
@@ -46,7 +47,8 @@
     "no_jars": "未找到 .jar 文件",
     "no_strategies": "未选择任何验证策略！",
     "conn_test_title": "连接测试",
-    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}"
+    "conn_result": "Modrinth: {mr_status}\nCurseForge: {cf_status}",
+    "config_saved": "配置保存成功。"
   },
   "check_status": {
     "ok": "正常",
