@@ -26,6 +26,8 @@ class ModrinthClient:
         return results
 
     def check_connection(self) -> bool:
-        # Check root or specific endpoint
-        status, _ = self.client.get_json(self.base_url)
+        # Check root API endpoint (https://api.modrinth.com/) which returns API info
+        # self.base_url is .../v2 which returns 404 on root
+        root_url = self.base_url.replace("/v2", "/")
+        status, _ = self.client.get_json(root_url)
         return status == 200
