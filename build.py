@@ -11,6 +11,20 @@ def build():
         print("Installing PyInstaller...")
         subprocess.check_call([sys.executable, "-m", "pip", "install", "pyinstaller"])
 
+    # Prepare icon
+    if os.path.exists("image_1862.png"):
+        print("Found image_1862.png, converting to icon.ico...")
+        try:
+            from PIL import Image
+            img = Image.open("image_1862.png")
+            # Save as ICO containing multiple sizes for best quality on Windows
+            img.save("icon.ico", format='ICO', sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
+            print("Conversion successful.")
+        except ImportError:
+            print("Pillow not installed. Skipping icon conversion. Please run: pip install Pillow")
+        except Exception as e:
+            print(f"Error converting icon: {e}")
+
     # Check for icon
     icon_option = []
     if os.path.exists("icon.ico"):
